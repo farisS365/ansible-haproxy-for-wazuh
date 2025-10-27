@@ -1,0 +1,33 @@
+# Keepalived Configuration
+# Managed by Ansible - Do not edit manually
+# Template: keepalived.conf.j2
+
+vrrp_script chk_haproxy {
+    script "killall -0 haproxy"
+    interval 2
+    weight 2
+}
+
+vrrp_instance VI_1 {
+    state {{ keepalived_state }}
+    interface {{ vrrp_interface }}
+    virtual_router_id {{ vrrp_router_id }}
+    priority {{ keepalived_priority }}
+    advert_int 1
+    
+    authentication {
+        auth_type PASS
+        auth_pass {{ vrrp_auth_pass }}
+    }
+    
+    virtual_ipaddress {
+        {{ virtual_ip }}/{{ virtual_ip_cidr }}
+    }
+    
+    track_script {
+        chk_haproxy
+    }
+{% if keepalived_nopreempt | default(false) %}
+    nopreempt
+{% endif %}
+}

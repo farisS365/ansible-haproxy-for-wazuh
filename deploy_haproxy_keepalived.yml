@@ -1,0 +1,113 @@
+---
+# Ansible Playbook for HAProxy and Keepalived Setup
+# File: deploy_haproxy_keepalived.yml
+
+- name: Deploy HAProxy and Keepalived for Wazuh Load Balancing
+  hosts: loadbalancers
+  become: yes
+
+  tasks:
+    - name: Disable SELinux enforcement (temporary)
+      command: setenforce 0
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: yes
+
+    - name: Ensure SELinux is set to permissive permanently
+      selinux:
+        state: permissive
+      when: ansible_selinux.status == "enabled"
+      ignore_errors: yes
+
+    - name: Install HAProxy and Keepalived
+      package:
+        name:
+          - haproxy
+          - keepalived
+        state: present
+
+    - name: Configure kernel parameter for non-local IP binding
+      sysctl:
+        name: net.ipv4.ip_nonlocal_bind
+        value: '1'
+        state: present
+        reload: yes
+
+    - name: Ensure /run/haproxy directory exists
+      file:
+        path: /run/haproxy
+        state: directory
+        owner: haproxy
+        group: haproxy
+        mode: '0750'
+
+    - name: Backup original HAProxy configuration
+      copy:
+        src: /etc/haproxy/haproxy.cfg
+        dest: /etc/haproxy/haproxy.cfg.backup
+        remote_src: yes
+        force: no
+      ignore_errors: yes  # In case it's a fresh install
+
+    - name: Deploy HAProxy configuration
+      template:
+        src: haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+        owner: root
+        group: root
+        mode: '0644'
+        validate: 'haproxy -c -f %s'
+      notify: restart haproxy
+
+    - name: Deploy Keepalived configuration
+      template:
+        src: keepalived.conf.j2
+        dest: /etc/keepalived/keepalived.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart keepalived
+
+    - name: Enable and start HAProxy service
+      systemd:
+        name: haproxy
+        enabled: yes
+        state: started
+
+    - name: Enable and start Keepalived service
+      systemd:
+        name: keepalived
+        enabled: yes
+        state: started
+
+    - name: Open firewall ports for HAProxy (firewalld)
+      firewalld:
+        port: "{{ item }}/tcp"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - "{{ wazuh_register_port }}"
+        - "{{ wazuh_agents_port }}"
+        - "{{ wazuh_dashboard_port }}"
+      when: ansible_facts['os_family'] == "RedHat"
+      ignore_errors: yes
+
+    - name: Allow VRRP protocol (firewalld)
+      firewalld:
+        rich_rule: 'rule protocol value="vrrp" accept'
+        permanent: yes
+        state: enabled
+        immediate: yes
+      when: ansible_facts['os_family'] == "RedHat"
+      ignore_errors: yes
+
+  handlers:
+    - name: restart haproxy
+      systemd:
+        name: haproxy
+        state: restarted
+
+    - name: restart keepalived
+      systemd:
+        name: keepalived
+        state: restarted
