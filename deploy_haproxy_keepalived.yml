@@ -12,12 +12,6 @@
       when: ansible_selinux.status == "enabled"
       ignore_errors: yes
 
-    - name: Ensure SELinux is set to permissive permanently
-      selinux:
-        state: permissive
-      when: ansible_selinux.status == "enabled"
-      ignore_errors: yes
-
     - name: Install HAProxy and Keepalived
       package:
         name:
