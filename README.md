@@ -45,8 +45,8 @@ Edit `inventory.ini` and update:
 **Load Balancer Hosts:**
 ```ini
 [loadbalancers]
-haproxy1 ansible_host=192.168.237.168 keepalived_state=MASTER keepalived_priority=101
-haproxy2 ansible_host=192.168.237.169 keepalived_state=BACKUP keepalived_priority=100
+haproxy1 ansible_host=192.168.237.168 keepalived_state=MASTER keepalived_priority=101 vrrp_interface=enp0s3
+haproxy2 ansible_host=192.168.237.169 keepalived_state=BACKUP keepalived_priority=100 vrrp_interface=enp0s3
 ```
 
 **Virtual IP Settings:**
